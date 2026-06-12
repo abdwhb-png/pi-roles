@@ -293,10 +293,10 @@ session_start (reason="reload" | "resume")
 
 | Package | Version | Role |
 |---|---|---|
-| `@mariozechner/pi-coding-agent` | `*` (peer) | Extension host — `ExtensionAPI`, `ExtensionContext`, events, commands, flags |
-| `@mariozechner/pi-agent-core` | `*` (peer) | Session management (`getEntries`, `newSession`) |
-| `@mariozechner/pi-ai` | `*` (peer) | `complete()` for title generation |
-| `@mariozechner/pi-tui` | `*` (optional peer) | `AutocompleteItem` type for tab completions |
+| `@earendil-works/pi-coding-agent` | `*` (peer) | Extension host — `ExtensionAPI`, `ExtensionContext`, events, commands, flags |
+| `@earendil-works/pi-agent-core` | `*` (peer) | Session management (`getEntries`, `newSession`) |
+| `@earendil-works/pi-ai` | `*` (peer) | `complete()` for title generation |
+| `@earendil-works/pi-tui` | `*` (optional peer) | `AutocompleteItem` type for tab completions |
 | `typebox` | `^1.0.0` (peer) | Schema validation — the `typebox` root package (1.x), NOT `@sinclair/typebox` |
 | `yaml` | `^2.5.0` (direct) | YAML frontmatter parsing |
 

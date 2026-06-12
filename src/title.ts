@@ -39,8 +39,8 @@
  * generation-token cancellation scheme.
  */
 
-import { complete, type AssistantMessage, type Context, type Model } from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { complete, type AssistantMessage, type Context, type Model } from "@earendil-works/pi-ai";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { composeFooterStatus, composeSessionName, findModelInRegistry } from "./apply.ts";
 import { debugLog } from "./debug.ts";
 import {
