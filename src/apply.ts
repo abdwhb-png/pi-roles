@@ -200,14 +200,14 @@ export function filterToolsForRuntime(
 }
 
 /**
- * Compose the session name in `<intent> - <role>` format. Uses INTENT_PLACEHOLDER
- * when intent is empty/undefined so the name stays readable (e.g.
- * `"<intent> - architect"`) rather than just `"- architect"`.
+ * Compose the session name in `<intent> - <role>` format. Returns `undefined`
+ * when intent is empty/undefined so callers can skip calling
+ * `pi.setSessionName()` and leave the pi-chosen session name intact.
  */
-export function composeSessionName(intent: string | undefined, roleName: string): string {
+export function composeSessionName(intent: string | undefined, roleName: string): string | undefined {
   const trimmed = (intent ?? "").trim();
-  const intentPart = trimmed.length > 0 ? trimmed : INTENT_PLACEHOLDER;
-  return `${intentPart} - ${roleName}`;
+  if (trimmed.length === 0) return undefined;
+  return `${trimmed} - ${roleName}`;
 }
 
 /**
@@ -215,7 +215,8 @@ export function composeSessionName(intent: string | undefined, roleName: string)
  * name prefixed with "role:".
  */
 export function composeFooterStatus(roleName: string, intent: string | undefined): string {
-  return composeSessionName(intent, roleName);
+  const name = composeSessionName(intent, roleName);
+  return name ?? `${INTENT_PLACEHOLDER} - ${roleName}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -312,8 +313,12 @@ export async function applyRole(
     ctx.ui.setStatus(STATUS_KEY, composeFooterStatus(role.name, options.preservedIntent));
   }
 
-  // 5. Session name
-  pi.setSessionName(composeSessionName(options.preservedIntent, role.name));
+  // 5. Session name — only override when we have a meaningful intent to show.
+  //    Otherwise we let pi's built-in session name stand.
+  const sessionName = composeSessionName(options.preservedIntent, role.name);
+  if (sessionName) {
+    pi.setSessionName(sessionName);
+  }
 
   // 6. Persist
   const state: ActiveRoleState = {

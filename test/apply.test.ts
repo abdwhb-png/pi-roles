@@ -271,10 +271,10 @@ describe("filterToolsForRuntime", () => {
 });
 
 describe("composeSessionName", () => {
-  it("empty/undefined intent → INTENT_PLACEHOLDER - role", () => {
-    expect(composeSessionName(undefined, "architect")).toBe("Intent not defined - architect");
-    expect(composeSessionName("", "architect")).toBe("Intent not defined - architect");
-    expect(composeSessionName("   ", "architect")).toBe("Intent not defined - architect");
+  it("empty/undefined intent → undefined", () => {
+    expect(composeSessionName(undefined, "architect")).toBeUndefined();
+    expect(composeSessionName("", "architect")).toBeUndefined();
+    expect(composeSessionName("   ", "architect")).toBeUndefined();
   });
   it("non-empty → '<intent> - <role>'", () => {
     expect(composeSessionName("designing schema", "architect")).toBe(
@@ -317,7 +317,7 @@ describe("applyRole", () => {
     expect(fake.pi.setThinkingLevel).toHaveBeenCalledWith("high");
     expect(fake.pi.setActiveTools).toHaveBeenCalledWith(["read", "write"]);
     expect(fake.ctx.ui.setStatus).toHaveBeenCalledWith(STATUS_KEY, "Intent not defined - test");
-    expect(fake.pi.setSessionName).toHaveBeenCalledWith("Intent not defined - test");
+    expect(fake.pi.setSessionName).not.toHaveBeenCalled();
     expect(fake.pi.appendEntry).toHaveBeenCalledWith(
       ACTIVE_ROLE_ENTRY_TYPE,
       expect.objectContaining({ name: "test", source: "project" }),

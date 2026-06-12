@@ -93,8 +93,8 @@ const MAX_WORDS = 10;
  *      truncation cut mid-clause.
  *
  * Returns "" for empty input. Callers must check before persisting — when
- * intent is empty, composeSessionName uses INTENT_PLACEHOLDER, leaving the
- * session name as `<intent> - <role>`.
+ * intent is empty, composeSessionName returns undefined and callers skip
+ * setSessionName, leaving the pi-chosen session name intact.
  */
 export function extractTitle(raw: string): string {
   if (!raw) return "";
@@ -289,7 +289,10 @@ export async function generateAndApplyTitle(args: TitleArgs): Promise<void> {
     if (!state.activeRole) return;
 
     state.intent = intent;
-    pi.setSessionName(composeSessionName(intent, state.activeRole.name));
+    const sessionName = composeSessionName(intent, state.activeRole.name);
+    if (sessionName) {
+      pi.setSessionName(sessionName);
+    }
     if (ctx.hasUI) {
       ctx.ui.setStatus(STATUS_KEY, composeFooterStatus(state.activeRole.name, intent));
     }
