@@ -276,6 +276,9 @@ describe("composeSessionName", () => {
     expect(composeSessionName("", "architect")).toBeUndefined();
     expect(composeSessionName("   ", "architect")).toBeUndefined();
   });
+  it("legacy INTENT_PLACEHOLDER sentinel → undefined", () => {
+    expect(composeSessionName("Intent not defined", "architect")).toBeUndefined();
+  });
   it("non-empty → '<intent> - <role>'", () => {
     expect(composeSessionName("designing schema", "architect")).toBe(
       "designing schema - architect",

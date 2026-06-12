@@ -29,6 +29,7 @@ import { discoverRoles, findBuiltInAssistant, resolveRole, RoleResolutionError }
 import {
   ACTIVE_ROLE_ENTRY_TYPE,
   BUILTIN_ROLE_ASSISTANT_NAME,
+  INTENT_PLACEHOLDER,
   ROLE_NOTIFICATION_MESSAGE_TYPE,
   type ActiveRoleState,
   type PiRolesSettings,
@@ -133,7 +134,14 @@ export default function (pi: ExtensionAPI): void {
       // intent is intentionally cleared on --reset (session is a fresh start).
     } else if ((event.reason === "reload" || event.reason === "resume") && restored) {
       targetName = restored.name;
-      preservedIntent = restored.intent;
+      // Normalize stale persisted intents — pi-roles <0.3 stored
+      // `INTENT_PLACEHOLDER` as the literal intent value, which would
+      // block title generation and re-surface the placeholder string
+      // in the session name. Treat it as absent.
+      preservedIntent =
+        restored.intent && restored.intent !== INTENT_PLACEHOLDER
+          ? restored.intent
+          : undefined;
       silent = true;
     } else {
       targetName = pickInitialRoleName(pi, state.settings, state.roles);

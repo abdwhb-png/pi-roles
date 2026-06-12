@@ -201,12 +201,17 @@ export function filterToolsForRuntime(
 
 /**
  * Compose the session name in `<intent> - <role>` format. Returns `undefined`
- * when intent is empty/undefined so callers can skip calling
- * `pi.setSessionName()` and leave the pi-chosen session name intact.
+ * when intent is empty/undefined or matches the legacy `INTENT_PLACEHOLDER`
+ * sentinel so callers can skip `pi.setSessionName()` and leave the
+ * pi-chosen session name intact.
+ *
+ * The sentinel check handles persisted state from pi-roles <0.3 that
+ * stored `"Intent not defined"` as the literal intent value — without this,
+ * resumed sessions would re-surface the stale placeholder string.
  */
 export function composeSessionName(intent: string | undefined, roleName: string): string | undefined {
   const trimmed = (intent ?? "").trim();
-  if (trimmed.length === 0) return undefined;
+  if (trimmed.length === 0 || trimmed === INTENT_PLACEHOLDER) return undefined;
   return `${trimmed} - ${roleName}`;
 }
 
