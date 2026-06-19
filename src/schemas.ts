@@ -331,8 +331,15 @@ export const ROLE_NOTIFICATION_MESSAGE_TYPE = "pi-roles:notification" as const;
 export const STATUS_KEY = "pi-roles" as const;
 
 /**
- * Name of the built-in default role. Acts as the lowest-priority fallback
- * when no defaultRole is configured and no --role / PI_ROLE is supplied.
+ * Name of the built-in default role (pi-agent). Acts as the lowest-priority
+ * fallback when no defaultRole is configured and no --role / PI_ROLE is
+ * supplied. Replaces the previous default `role-assistant`.
+ */
+export const BUILTIN_ROLE_DEFAULT_NAME = "pi-agent" as const;
+
+/**
+ * Name of the built-in role-assistant. Kept as a supplemental built-in role
+ * alongside the pi-agent default.
  */
 export const BUILTIN_ROLE_ASSISTANT_NAME = "role-assistant" as const;
 

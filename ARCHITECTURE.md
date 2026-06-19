@@ -8,8 +8,9 @@ role-driven agent. Each role is a Markdown file with YAML frontmatter — same c
 optional intercom mode for that session. Roles are hot-swappable mid-session without
 restarting Pi.
 
-The extension ships **one** built-in role (`role-assistant`) and is otherwise agnostic of
-which roles exist. Roles are user content, not extension code.
+The extension ships **two** built-in roles (`pi-agent` and `role-assistant`) and is otherwise agnostic of
+which roles exist. `pi-agent` is the default fallback; `role-assistant` is a supplemental
+role for interactive role-building. Roles are user content, not extension code.
 
 ## Architecture Overview
 
@@ -77,7 +78,7 @@ touches the filesystem or Pi APIs.
 | `RawRole` | TS interface | Parsed role from disk before `extends` resolution |
 | `ResolvedRole` | TS interface | Fully resolved role with `extends` chain merged |
 | `ToolsDirective` | TS union | Tri-state: `{ kind: "inherit" }` or `{ kind: "set", names: string[] }` |
-| Constants | `const` | `ACTIVE_ROLE_ENTRY_TYPE`, `ROLE_NOTIFICATION_MESSAGE_TYPE`, `STATUS_KEY`, `BUILTIN_ROLE_ASSISTANT_NAME` |
+| Constants | `const` | `ACTIVE_ROLE_ENTRY_TYPE`, `ROLE_NOTIFICATION_MESSAGE_TYPE`, `STATUS_KEY`, `BUILTIN_ROLE_DEFAULT_NAME`, `BUILTIN_ROLE_ASSISTANT_NAME` |
 
 ### `src/roles.ts` — Discovery + parsing + `extends` resolution
 
@@ -93,7 +94,7 @@ and `typebox/value`. Trivially testable.
 
 **Error strategy:** Throws `RoleResolutionError` for every user-facing problem. The message is
 shown directly in the TUI — no stack traces leak. Callers in `index.ts` catch and fall back
-to the built-in `role-assistant` on resolution failure.
+to the built-in `pi-agent` on resolution failure.
 
 **Discovery precedence:** project > user > built-in. First match for a given `name` wins;
 later matches are recorded as `shadowed` and surfaced in `/role list`.
@@ -176,7 +177,7 @@ Exposes `loadBuiltInRoleAssistant()` for tests and for direct loading when full 
 isn't needed. The real loader (`loadRoleFile`) lives in `roles.ts`; this module only adds
 path resolution and an existence check.
 
-### `resources/roles/role-assistant.md` — The built-in fallback
+### `resources/roles/role-assistant.md` — The built-in role builder
 
 A Markdown role file (YAML frontmatter + system prompt body) that:
 1. Greets the user and lists available roles
@@ -184,7 +185,14 @@ A Markdown role file (YAML frontmatter + system prompt body) that:
 3. Walks the user through building a new role interactively
 4. Writes the new role file to the chosen scope directory
 
-Lowest discovery priority — drop a same-named file in user or project scope to override.
+Third-level discovery priority after `pi-agent` (same built-in level; `/role list` shows both).
+
+### `resources/roles/pi-agent.md` — The built-in default
+
+A Markdown role file (YAML frontmatter + system prompt body) that serves as a
+general-purpose agent. It is the lowest-priority fallback when no `--role`, `PI_ROLE`,
+or `defaultRole` is configured. Provides a neutral, helpful agent persona with no
+domain-specific restrictions.
 
 ## Data Flow
 
@@ -201,7 +209,7 @@ session_start (reason="startup")
   │     └─ discoverRoles(cwd, scope)  → RawRole[]
   │
   ├─► pickInitialRoleName(pi, settings, roles)
-  │     precedence: --role > PI_ROLE > defaultRole > role-assistant
+  │     precedence: --role > PI_ROLE > defaultRole > pi-agent
   │
   └─► applyResolved(pi, ctx, state, "architect", options)
         │
@@ -338,15 +346,15 @@ Settings are re-read on every `session_start`, every `/role` invocation, and eve
 
 | Error class | When | Behavior |
 |---|---|---|
-| `RoleResolutionError` | Invalid YAML, schema violation, name/filename mismatch, cycle in `extends`, missing parent | Surface in TUI via `ctx.ui.notify("warning")`, fall back to built-in `role-assistant` |
+| `RoleResolutionError` | Invalid YAML, schema violation, name/filename mismatch, cycle in `extends`, missing parent | Surface in TUI via `ctx.ui.notify("warning")`, fall back to built-in `pi-agent` |
 | Model not found / no API key | `applyRole` model resolution | Warn, continue with existing model |
 | `mcp:*` tool not registered | `filterToolsForRuntime` | Drop entry silently (or warn if `warnOnMissingMcp: true`) |
 | `settings.json` parse failure | `loadSettings` | Return `{}`, proceed with defaults |
 | Title generation failure | `generateAndApplyTitle` catch block | Swallow — best effort, next prompt retries |
-| Complete absence of built-in `role-assistant` resource | `findBuiltInAssistant` | No-op — session starts without a role (Pi default system prompt) |
+| Complete absence of built-in `pi-agent` resource | `discoverRoles` | No-op — session starts without a role (Pi default system prompt) |
 
 **Principle:** A broken role file should never prevent pi-roles from loading.
-The built-in `role-assistant` is the universal fallback; if even that is missing,
+The built-in `pi-agent` is the universal fallback; if even that is missing,
 pi-roles degrades gracefully to a no-op.
 
 ### System prompt replacement
@@ -381,7 +389,7 @@ schema, because JSON Schema can't distinguish `undefined` from "not validated"):
 ## Non-Goals (explicitly out of scope)
 
 - **Spawning sub-agents.** That's `pi-subagents`. Compose the two.
-- **Defining built-in roles beyond `role-assistant`.** Roles are user content.
+- **Defining built-in roles beyond the shipped `pi-agent` and `role-assistant`.** Roles are user content.
 - **Managing parallel sessions.** Use multiple terminals or `tmux` + `pi-intercom`.
 - **Persisting active role across Pi restarts** (except via `--role` / `PI_ROLE` / `defaultRole`).
 - **Restricting which tools a role can request.** If a role lists `bash`, it gets `bash`.
@@ -415,10 +423,11 @@ pi-roles/
     settings.ts         settings.json loader
     role-assistant.ts   Built-in role-assistant path resolver
   test/
-    *.test.ts           Vitest test suites (125 tests)
+    *.test.ts           Vitest test suites (125+ tests)
   resources/
     roles/
-      role-assistant.md  The one built-in role
+      pi-agent.md        The built-in default role
+      role-assistant.md  The built-in role builder
   examples/
     architect.md         Minimal reference role
     orchestrator.md      Fully-loaded reference role

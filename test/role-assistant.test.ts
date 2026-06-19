@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { discoverRoles, findBuiltInAssistant, resolveRole } from "../src/roles.ts";
 import { builtInRoleAssistantPath, loadBuiltInRoleAssistant } from "../src/role-assistant.ts";
-import { BUILTIN_ROLE_ASSISTANT_NAME } from "../src/schemas.ts";
+import { BUILTIN_ROLE_ASSISTANT_NAME, BUILTIN_ROLE_DEFAULT_NAME } from "../src/schemas.ts";
 import { existsSync } from "node:fs";
 
 describe("built-in role-assistant", () => {
@@ -30,13 +30,19 @@ describe("built-in role-assistant", () => {
     expect(role.frontmatter.tools).toBeUndefined();
   });
 
-  it("appears in discoverRoles output as built-in", () => {
-    // Use a tmp cwd that has no project .pi/roles so we don't pick up
-    // unrelated roles from this dev checkout.
-    const result = discoverRoles("/tmp", "user");
+  it("appears alongside pi-agent in discoverRoles output as built-in", () => {
+    // Use "project" scope to avoid shadowing from ~/.pi/agent/roles/.
+    const result = discoverRoles("/tmp", "project");
     const found = findBuiltInAssistant(result.roles);
     expect(found).toBeDefined();
     expect(found!.source).toBe("built-in");
+
+    // Both built-in roles are present
+    const builtInNames = result.roles
+      .filter((r) => r.source === "built-in")
+      .map((r) => r.frontmatter.name)
+      .sort();
+    expect(builtInNames).toEqual([BUILTIN_ROLE_DEFAULT_NAME, BUILTIN_ROLE_ASSISTANT_NAME]);
   });
 
   it("resolveRole on the built-in returns a usable ResolvedRole", () => {

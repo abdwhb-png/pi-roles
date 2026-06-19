@@ -1,12 +1,16 @@
 /**
- * Built-in `role-assistant` accessor.
+ * Built-in role accessor for `role-assistant`.
  *
- * The role file itself lives at `resources/roles/role-assistant.md` and is
- * already discovered by `roles.ts` via the built-in roles directory. This
- * module exists so other code (and tests) can:
+ * The pi-roles package ships two built-in roles under `resources/roles/`:
  *
- *   - locate the bundled file path without duplicating `import.meta.url`
- *     plumbing, and
+ *   - `pi-agent`        — default fallback; general-purpose agent persona
+ *   - `role-assistant`  — interactive role builder; helps pick/build roles
+ *
+ * Both are discovered automatically by `roles.ts` via the built-in roles
+ * directory. This module exists so other code (and tests) can:
+ *
+ *   - locate the bundled `role-assistant.md` file path without duplicating
+ *     `import.meta.url` plumbing, and
  *   - load the role independently of full discovery (useful when a malformed
  *     project-scope role would otherwise prevent us from showing the
  *     fallback).

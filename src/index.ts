@@ -25,10 +25,10 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import { applyRole, effectiveIntercomMode, resetSession, type RoleNotificationDetails } from "./apply.ts";
 import { intercomPromptAddendum, isIntercomAvailable } from "./intercom.ts";
-import { discoverRoles, findBuiltInAssistant, resolveRole, RoleResolutionError } from "./roles.ts";
+import { discoverRoles, resolveRole, RoleResolutionError } from "./roles.ts";
 import {
   ACTIVE_ROLE_ENTRY_TYPE,
-  BUILTIN_ROLE_ASSISTANT_NAME,
+  BUILTIN_ROLE_DEFAULT_NAME,
   INTENT_PLACEHOLDER,
   ROLE_NOTIFICATION_MESSAGE_TYPE,
   type ActiveRoleState,
@@ -303,7 +303,7 @@ export function pickInitialRoleName(
     return configured;
   }
 
-  return BUILTIN_ROLE_ASSISTANT_NAME;
+  return BUILTIN_ROLE_DEFAULT_NAME;
 }
 
 /**
@@ -354,14 +354,14 @@ async function applyResolved(
     // Fall back to built-in assistant if the requested role is missing or
     // broken. Surface the underlying error so the user can fix the file.
     if (ctx.hasUI) {
-      ctx.ui.notify(`pi-roles: ${message} Falling back to ${BUILTIN_ROLE_ASSISTANT_NAME}.`, "warning");
+      ctx.ui.notify(`pi-roles: ${message} Falling back to ${BUILTIN_ROLE_DEFAULT_NAME}.`, "warning");
     }
-    const fallback = findBuiltInAssistant(state.roles);
+    const fallback = state.roles.find((r) => r.frontmatter.name === BUILTIN_ROLE_DEFAULT_NAME && r.source === "built-in");
     if (!fallback) {
       // Built-in is missing too — bail without changing session state.
       return;
     }
-    resolved = resolveRole(BUILTIN_ROLE_ASSISTANT_NAME, state.roles);
+    resolved = resolveRole(BUILTIN_ROLE_DEFAULT_NAME, state.roles);
   }
 
   const result = await applyRole(

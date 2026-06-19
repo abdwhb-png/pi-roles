@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import { composeSystemPrompt, pickInitialRoleName, roleCompletions } from "../src/index.ts";
 import { parseRoleSource, resolveRole } from "../src/roles.ts";
+import { BUILTIN_ROLE_DEFAULT_NAME } from "../src/schemas.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { PiRolesSettings, RawRole, ResolvedRole } from "../src/schemas.ts";
 import { INTERCOM_TOOL_NAME } from "../src/intercom.ts";
@@ -74,14 +75,14 @@ describe("pickInitialRoleName", () => {
   it("falls back to built-in when defaultRole missing from disk", () => {
     withEnv(undefined, () => {
       expect(pickInitialRoleName(makePi(), { defaultRole: "ghost" }, roles)).toBe(
-        "role-assistant",
+        BUILTIN_ROLE_DEFAULT_NAME,
       );
     });
   });
 
   it("falls back to built-in when nothing is set", () => {
     withEnv(undefined, () => {
-      expect(pickInitialRoleName(makePi(), {}, roles)).toBe("role-assistant");
+      expect(pickInitialRoleName(makePi(), {}, roles)).toBe(BUILTIN_ROLE_DEFAULT_NAME);
     });
   });
 
