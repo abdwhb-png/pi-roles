@@ -252,6 +252,11 @@ export const PiRolesSettingsSchema = Type.Object(
      * If set to a missing role, we warn and use the built-in role-assistant.
      */
     defaultRole: Type.Optional(Type.String({ minLength: 1 })),
+    /**
+     * Whether to append the original system prompt (e.g. from AGENTS.md or --append-system-prompt)
+     * before the role's body. Default: true.
+     */
+    enableSystemPromptAppend: Type.Optional(Type.Boolean()),
 
     /** Default intercom mode for roles that don't set `intercom:`. Default: "off". */
     intercomMode: Type.Optional(IntercomModeSchema),

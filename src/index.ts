@@ -201,7 +201,7 @@ export default function (pi: ExtensionAPI): void {
         sourceEntryId: switchReq.entry.id,
         timestamp: Date.now(),
       });
-      return composeSystemPrompt(state, pi);
+      return composeSystemPrompt(state, pi, event.systemPrompt, ctx);
     }
 
     if (
@@ -220,7 +220,7 @@ export default function (pi: ExtensionAPI): void {
         configuredTitleModel: state.settings.titleModel,
       });
     }
-    return composeSystemPrompt(state, pi);
+    return composeSystemPrompt(state, pi, event.systemPrompt, ctx);
   });
 
   // ---------------------------------------------------------------- /role
@@ -346,6 +346,8 @@ export default function (pi: ExtensionAPI): void {
 export function composeSystemPrompt(
   state: Pick<RuntimeState, "activeRole" | "settings">,
   pi: Pick<ExtensionAPI, "getAllTools" | "getSessionName">,
+  originalPrompt?: string,
+  ctx?: any
 ): { systemPrompt: string } | undefined {
   if (!state.activeRole) return undefined;
   const body = state.activeRole.body;
@@ -354,9 +356,26 @@ export function composeSystemPrompt(
     mode !== "off" && isIntercomAvailable(pi as ExtensionAPI)
       ? intercomPromptAddendum(mode, pi.getSessionName())
       : "";
-  const parts = [body, addendum].filter((p) => p.length > 0);
-  if (parts.length === 0) return undefined;
-  return { systemPrompt: parts.join("\n\n") };
+      
+  const parts = [];
+  
+  if (state.settings.enableSystemPromptAppend !== false) {
+    if (originalPrompt) {
+      parts.push(originalPrompt);
+    } else if (ctx && ctx.hasUI) {
+      ctx.ui.notify("pi-roles: enableSystemPromptAppend is true but no original system prompt was found to append.", "warning");
+    }
+  }
+  
+  parts.push(body);
+  
+  if (addendum) {
+    parts.push(addendum);
+  }
+  
+  const filteredParts = parts.filter((p) => p.length > 0);
+  if (filteredParts.length === 0) return undefined;
+  return { systemPrompt: filteredParts.join("\n\n") };
 }
 
 /**
