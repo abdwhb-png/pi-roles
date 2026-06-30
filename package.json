@@ -1,6 +1,6 @@
 {
   "name": "pi-roles",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Role-based session configuration for pi coding agent. Launch a session as a named role and hot-swap roles mid-session, with optional pi-intercom and pi-mcp-adapter integration.",
   "keywords": [
     "pi-package",
@@ -24,7 +24,8 @@
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./protocol": "./dist/protocol.js"
   },
   "types": "./dist/index.d.ts",
   "files": [

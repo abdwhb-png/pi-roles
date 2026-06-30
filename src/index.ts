@@ -22,6 +22,7 @@
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { Type } from "@earendil-works/pi-ai";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import { applyRole, effectiveIntercomMode, resetSession, type RoleNotificationDetails } from "./apply.ts";
 import { intercomPromptAddendum, isIntercomAvailable } from "./intercom.ts";
@@ -39,6 +40,8 @@ import {
 import { loadSettings } from "./settings.ts";
 import { generateAndApplyTitle } from "./title.ts";
 import { debugLog } from "./debug.ts";
+import { formatSwitchRoleResult, validateRoleName } from "./switch-role.ts";
+import { findUnprocessedSwitchRequest, ROLE_SWITCH_PROCESSED_TYPE } from "./protocol.ts";
 
 const FLAG_NAME = "role";
 const ENV_VAR = "PI_ROLE";
@@ -182,6 +185,25 @@ export default function (pi: ExtensionAPI): void {
       promptLen: event?.prompt?.length ?? 0,
       ctxModelId: (ctx as any)?.model?.id,
     });
+
+    // ── Role-switch request protocol ──
+    // Trigger extensions (plan-auto-switch, prompt-role-switch, etc.) write
+    // pi-roles:switch-request entries; we consume them here and apply the
+    // role ourselves so pi-roles remains the single owner of state.activeRole.
+    const switchReq = findUnprocessedSwitchRequest(ctx.sessionManager.getEntries());
+    if (switchReq) {
+      debugLog("index", "consumed switch-request", { targetRole: switchReq.data.targetRole, reason: switchReq.data.reason });
+      await applyResolved(pi, ctx, state, switchReq.data.targetRole, {
+        silent: false,
+        preservedIntent: state.intent,
+      });
+      pi.appendEntry(ROLE_SWITCH_PROCESSED_TYPE, {
+        sourceEntryId: switchReq.entry.id,
+        timestamp: Date.now(),
+      });
+      return composeSystemPrompt(state, pi);
+    }
+
     if (
       state.activeRole &&
       !state.intent &&
@@ -242,6 +264,66 @@ export default function (pi: ExtensionAPI): void {
       }
 
       await applyResolved(pi, ctx, state, name, { silent: false, preservedIntent: state.intent });
+    },
+  });
+
+  // ---------------------------------------------------------------- switch_role tool
+  // LLM-callable counterpart to `/role <name>`. Resolves and applies the
+  // named role through the same `applyResolved` path as the command, so
+  // model/thinking/tools/session-name are mutated identically. Unlike the
+  // command, the tool does NOT support `--reset` — conversation history is
+  // preserved so the LLM retains context across the handoff (e.g. from
+  // planning to implementation).
+  pi.registerTool({
+    name: "switch_role",
+    label: "Switch Role",
+    description:
+      "Switch the active session role programmatically. The named role must exist " +
+      "in ~/.pi/agent/roles/ or .pi/roles/. Applies the role's model, thinking level, " +
+      "tool set, and system prompt — same as the /role command but callable by the LLM. " +
+      "Conversation history is preserved (no reset). Use this to hand off between " +
+      "specialized roles (e.g. plan → pi-agent after plan approval).",
+    parameters: Type.Object({
+      roleName: Type.String({
+        description:
+          "Name of the role to switch to. Must match a role file name (without .md). " +
+          "Use /role list to discover available roles.",
+      }),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const roleName = (params as { roleName?: string })?.roleName?.trim() ?? "";
+
+      // Validate against discovered roles (refresh first so newly added
+      // role files are visible without an explicit /role reload).
+      refreshFromDisk(ctx.cwd);
+      const validationError = validateRoleName(roleName, state.roles);
+      if (validationError) {
+        return {
+          content: [{ type: "text", text: `Error: ${validationError}` }],
+          details: { switched: false },
+        };
+      }
+
+      // Apply through the shared path. Silent=true because the tool result
+      // text already communicates the switch; a TUI banner would be noise.
+      await applyResolved(pi, ctx, state, roleName, {
+        silent: true,
+        preservedIntent: state.intent,
+      });
+
+      // applyResolved returns void on success; warnings are surfaced via
+      // ctx.ui.notify inside it. We compose a result text from the role
+      // name and any warnings we can observe via the active role pointer.
+      const warnings: string[] = [];
+      if (ctx.hasUI) {
+        // Warnings were already notified by applyResolved; we don't
+        // duplicate them here. The result text is a clean confirmation.
+      }
+      const text = formatSwitchRoleResult(roleName, warnings);
+      return {
+        content: [{ type: "text", text }],
+        details: { switched: true, roleName },
+      };
     },
   });
 }
