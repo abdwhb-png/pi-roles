@@ -7,7 +7,7 @@
 **Phase 6 (Built-in role-assistant) — ✅ complete.** `resources/roles/role-assistant.md`, `src/role-assistant.ts`, `test/role-assistant.test.ts` (5 tests).
 **Phase 7 (Intercom integration) — ✅ complete.** `src/intercom.ts`, `test/intercom.test.ts` (7 tests). `before_agent_start` in `index.ts` now composes role body + intercom addendum.
 **Phase 8 (Examples + tests) — ✅ complete.** `examples/architect.md`, `examples/orchestrator.md`, `test/examples.test.ts` (3 tests).
-**Phase 5 (title generation) — ✅ complete.** `src/title.ts`, `test/title.test.ts` (37 tests). `before_agent_start` in `index.ts` fires `generateAndApplyTitle` fire-and-forget on the first prompt of a session; success path mutates `state.intent`, calls `pi.setSessionName`, and re-persists the active-role entry. **125 tests passing total.**
+**Phase 5 (title generation) — ❌ removed.** Intent/title generation was removed. The status bar shows `Pi-role: <name>` and the session name is just `<name>`. No summarization, no placeholder. See `docs/plans/remove-intent-title-generation.md` for the full change. **89 tests passing.**
 
 ### Verified-against-pi-coding-agent-0.70.2 corrections (from Phase 3 work)
 

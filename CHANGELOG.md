@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Intent/title generation removed.** No more `"Intent not defined"` placeholder in status bar. Status bar now shows `Pi-role: <name>`. Session name is just `<name>`. Deleted `src/title.ts` and `test/title.test.ts`. Removed `INTENT_PLACEHOLDER` constant, `preservedIntent` plumbing, and title-gen infrastructure from `apply.ts`, `index.ts`, `schemas.ts`.
+
 ## [0.2.0] - 2026-05-05
 
 ### Changed

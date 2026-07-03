@@ -15,7 +15,9 @@ PI_ROLE=planner pi               # or via env
 /role reload                     # re-read the active role file from disk
 ```
 
-When you swap roles, the session's **system prompt, model, thinking level, and active tool set** are replaced according to the new role's definition. Conversation history is preserved by default.
+When you swap roles, the session's **system prompt, model, thinking level, and active tool set** are updated according to the new role's definition. Conversation history is preserved by default.
+
+By default, `pi-roles` now **preserves Pi's fully-built system prompt** (default assistant framing, `AGENTS.md`, `CLAUDE.md`, `.pi/system.md`, and any `--append-system-prompt` content) and appends the role body after it. You can explicitly disable that behavior with the `enableSystemPromptAppend` setting if you want the historical full-override mode.
 
 ---
 
@@ -147,10 +149,10 @@ The default `roleScope` is `both` (project + user + built-in). Override via sett
 // ~/.pi/agent/settings.json
 {
   "pi-roles": {
-    "roleScope": "both",        // "user" | "project" | "both"
-    "defaultRole": "architect", // optional; falls back to role-assistant
-    "intercomMode": "off",      // "off" | "receive" | "send" | "both"
-    "titleModel": "openai/gpt-4o-mini"
+    "roleScope": "both",              // "user" | "project" | "both"
+    "defaultRole": "architect",       // optional; falls back to built-in pi-agent
+    "enableSystemPromptAppend": true,   // default: true
+    "intercomMode": "off",            // "off" | "receive" | "send" | "both"
   }
 }
 ```
@@ -159,7 +161,7 @@ The default `roleScope` is `both` (project + user + built-in). Override via sett
 
 ## Built-in `role-assistant`
 
-`pi-roles` ships **one** built-in role: `role-assistant`. It's the default fallback when no `defaultRole` is configured and you don't pass `--role` or `PI_ROLE`.
+`pi-roles` ships a built-in `role-assistant`, but the built-in **default** role is now `pi-agent`. `role-assistant` remains available as a supplemental built-in role.
 
 The role-assistant:
 
@@ -175,7 +177,22 @@ You can also set any other role as your default:
 { "pi-roles": { "defaultRole": "architect" } }
 ```
 
-If `defaultRole` points to a missing role, the built-in `role-assistant` is used and a warning is shown.
+If `defaultRole` points to a missing role, the built-in `pi-agent` is used and a warning is shown.
+
+## System prompt composition
+
+By default, `pi-roles` composes the final system prompt as:
+
+1. Pi's original system prompt (`event.systemPrompt`)
+2. the role body
+3. the optional intercom addendum
+
+This behavior is controlled by `enableSystemPromptAppend`:
+
+- `true` (default): preserve Pi's original system/context prompt and append the role body
+- `false`: historical full-override mode — use only the role body (+ intercom addendum)
+
+If `enableSystemPromptAppend` is enabled but Pi does not provide an original system prompt for the turn, `pi-roles` surfaces a warning so the failure is visible instead of silently discarding expected context.
 
 ---
 
@@ -206,7 +223,7 @@ Resolution order: `--role` > `PI_ROLE` > `defaultRole` setting > built-in `role-
 
 ## Session name and footbar
 
-Each session is named `<role-name>` (and, once the title-generation phase ships, `<role-name> — <intent>`, where `<intent>` is a short summary of your first user message). The role-name prefix updates when you `/role` to a different role.
+Each session is named `<role-name>`. The role-name prefix updates when you `/role` to a different role.
 
 The session name is set via Pi's native `pi.setSessionName()` API, so:
 
@@ -214,8 +231,6 @@ The session name is set via Pi's native `pi.setSessionName()` API, so:
 - [`pi-intercom`](https://github.com/nicobailon/pi-intercom) automatically uses it as the session target — making cross-session messaging work out of the box.
 
 The role indicator also appears in Pi's footer (via `ctx.ui.setStatus`), composing cleanly with [`pi-powerline-footer`](https://github.com/nicobailon/pi-powerline-footer) if you have it installed. No extra dependency required.
-
-**Title generation model** (planned). The `titleModel` setting is reserved for the future intent-summarization step; it has no effect today. The current release sets the session name to the bare role name and updates the prefix on swap.
 
 ---
 
@@ -273,7 +288,6 @@ If you have Pi's [auto-reload](https://github.com/badlogic/pi-mono/blob/main/pac
     "roleScope": "both",
     "defaultRole": "role-assistant",
     "intercomMode": "off",
-    "titleModel": "openai/gpt-4o-mini",
     "warnOnMissingMcp": true
   }
 }
@@ -284,7 +298,7 @@ If you have Pi's [auto-reload](https://github.com/badlogic/pi-mono/blob/main/pac
 | `roleScope` | `"both"` | Discovery scope. `"user"`, `"project"`, or `"both"`. |
 | `defaultRole` | `"role-assistant"` | Role applied at session start when no `--role` or `PI_ROLE`. |
 | `intercomMode` | `"off"` | Default intercom behavior for roles that don't set it explicitly. |
-| `titleModel` | `null` (auto) | Model used for session-intent summarization. Falls back to a small built-in or session's current model. |
+| `titleModel` | `null` (ignored) | No longer used. Intent/title generation was removed. |
 | `warnOnMissingMcp` | `true` | Whether to surface a warning when a role's `mcp:*` entry can't be resolved. |
 
 Project settings beat global settings, per Pi's standard precedence.
@@ -310,7 +324,6 @@ These are decided, not configurable, so the extension behaves predictably:
 - **Cycle detection in `extends`** is a hard error at load time, not a warning. A circular role is broken; refusing to load it is the only sane behavior.
 - **`/role <name>` always re-reads from disk.** No staleness between switches, ever.
 - **`--reset` is explicit.** The role-assistant prints the exact `--reset` command for you to run manually rather than auto-resetting; resetting is destructive enough to deserve a deliberate keystroke.
-- **Title generation** (planned, not yet implemented). The current release sets the session name to the bare role name; intent-summarization on first user message lands in a follow-up. `--reset` already clears the cached intent so the future implementation drops in cleanly.
 - **Built-in `role-assistant` lives at the lowest discovery priority.** Drop a same-named file in user or project scope to override it.
 - **`/role list` shows shadowed entries** with a `(shadowed)` marker — you can see what *would* load if the higher-priority file didn't exist.
 

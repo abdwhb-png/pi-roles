@@ -56,7 +56,6 @@ interface FakeApi {
     setThinkingLevel: ReturnType<typeof vi.fn>;
     setActiveTools: ReturnType<typeof vi.fn>;
     getAllTools: ReturnType<typeof vi.fn>;
-    setSessionName: ReturnType<typeof vi.fn>;
     appendEntry: ReturnType<typeof vi.fn>;
     sendMessage: ReturnType<typeof vi.fn>;
   };
@@ -84,7 +83,6 @@ function makeFake(
       setThinkingLevel: vi.fn(),
       setActiveTools: vi.fn(),
       getAllTools: vi.fn(() => tools.map((t) => ({ ...t, sourceInfo: {} }))),
-      setSessionName: vi.fn(),
       appendEntry: vi.fn(),
       sendMessage: vi.fn(),
     },
@@ -271,29 +269,17 @@ describe("filterToolsForRuntime", () => {
 });
 
 describe("composeSessionName", () => {
-  it("empty/undefined intent → undefined", () => {
-    expect(composeSessionName(undefined, "architect")).toBeUndefined();
-    expect(composeSessionName("", "architect")).toBeUndefined();
-    expect(composeSessionName("   ", "architect")).toBeUndefined();
-  });
-  it("legacy INTENT_PLACEHOLDER sentinel → undefined", () => {
-    expect(composeSessionName("Intent not defined", "architect")).toBeUndefined();
-  });
-  it("non-empty → '<intent> - <role>'", () => {
-    expect(composeSessionName("designing schema", "architect")).toBe(
-      "designing schema - architect",
-    );
+  it("returns the role name", () => {
+    expect(composeSessionName("architect")).toBe("architect");
+    expect(composeSessionName("planner")).toBe("planner");
   });
 });
 
 describe("composeFooterStatus", () => {
-  it("undefined intent → INTENT_PLACEHOLDER - role", () => {
-    expect(composeFooterStatus("architect", undefined)).toBe("Intent not defined - architect");
-    expect(composeFooterStatus("architect", "")).toBe("Intent not defined - architect");
-    expect(composeFooterStatus("architect", "   ")).toBe("Intent not defined - architect");
-  });
-  it("non-empty intent → '<intent> - <role>'", () => {
-    expect(composeFooterStatus("architect", "designing schema")).toBe("designing schema - architect");
+  it("returns 'Pi-role: <name>'", () => {
+    expect(composeFooterStatus("architect")).toBe("Pi-role: architect");
+    expect(composeFooterStatus("planner")).toBe("Pi-role: planner");
+    expect(composeFooterStatus("test")).toBe("Pi-role: test");
   });
 });
 
@@ -302,7 +288,7 @@ describe("composeFooterStatus", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyRole", () => {
-  it("happy path: applies model, thinking, tools, footer, name, persists, notifies", async () => {
+  it("happy path: applies model, thinking, tools, footer, persists, notifies", async () => {
     const fake = makeFake({
       models: [{ id: "claude-opus-4-7", provider: "anthropic", name: "Opus" }],
       tools: [{ name: "read" }, { name: "write" }],
@@ -319,8 +305,7 @@ describe("applyRole", () => {
     expect(fake.pi.setModel).toHaveBeenCalledTimes(1);
     expect(fake.pi.setThinkingLevel).toHaveBeenCalledWith("high");
     expect(fake.pi.setActiveTools).toHaveBeenCalledWith(["read", "write"]);
-    expect(fake.ctx.ui.setStatus).toHaveBeenCalledWith(STATUS_KEY, "Intent not defined - test");
-    expect(fake.pi.setSessionName).not.toHaveBeenCalled();
+    expect(fake.ctx.ui.setStatus).toHaveBeenCalledWith(STATUS_KEY, "Pi-role: test");
     expect(fake.pi.appendEntry).toHaveBeenCalledWith(
       ACTIVE_ROLE_ENTRY_TYPE,
       expect.objectContaining({ name: "test", source: "project" }),
@@ -391,17 +376,7 @@ describe("applyRole", () => {
     expect(fake.pi.sendMessage).not.toHaveBeenCalled();
   });
 
-  it("preservedIntent flows into session name and persisted state", async () => {
-    const fake = makeFake();
-    await applyRole(makeRole({ name: "architect" }), applyCtxOf(fake), {
-      preservedIntent: "wiring schemas",
-    });
-    expect(fake.pi.setSessionName).toHaveBeenCalledWith("wiring schemas - architect");
-    expect(fake.pi.appendEntry).toHaveBeenCalledWith(
-      ACTIVE_ROLE_ENTRY_TYPE,
-      expect.objectContaining({ intent: "wiring schemas" }),
-    );
-  });
+
 
   it("hasUI=false skips setStatus", async () => {
     const fake = makeFake({ hasUI: false });

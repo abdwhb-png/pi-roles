@@ -27,7 +27,6 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   ACTIVE_ROLE_ENTRY_TYPE,
-  INTENT_PLACEHOLDER,
   ROLE_NOTIFICATION_MESSAGE_TYPE,
   STATUS_KEY,
   type ActiveRoleState,
@@ -57,12 +56,6 @@ export interface ApplyContext {
 export interface ApplyOptions {
   /** Suppress the "Switched to role X" sendMessage notification. */
   silent?: boolean;
-  /**
-   * If we're applying mid-session (vs. on `session_start`), pass the prior
-   * intent so the session-name prefix can be swapped while the trailing
-   * intent is preserved. Phase 5 supplies this from persisted state.
-   */
-  preservedIntent?: string;
 }
 
 export interface ApplyResult {
@@ -200,28 +193,17 @@ export function filterToolsForRuntime(
 }
 
 /**
- * Compose the session name in `<intent> - <role>` format. Returns `undefined`
- * when intent is empty/undefined or matches the legacy `INTENT_PLACEHOLDER`
- * sentinel so callers can skip `pi.setSessionName()` and leave the
- * pi-chosen session name intact.
- *
- * The sentinel check handles persisted state from pi-roles <0.3 that
- * stored `"Intent not defined"` as the literal intent value — without this,
- * resumed sessions would re-surface the stale placeholder string.
+ * Compose the session name — just the role name.
  */
-export function composeSessionName(intent: string | undefined, roleName: string): string | undefined {
-  const trimmed = (intent ?? "").trim();
-  if (trimmed.length === 0 || trimmed === INTENT_PLACEHOLDER) return undefined;
-  return `${trimmed} - ${roleName}`;
+export function composeSessionName(roleName: string): string {
+  return roleName;
 }
 
 /**
- * Compose the footer status string shown in the status bar. Shows the role
- * name prefixed with "role:".
+ * Compose the footer status string shown in the status bar.
  */
-export function composeFooterStatus(roleName: string, intent: string | undefined): string {
-  const name = composeSessionName(intent, roleName);
-  return name ?? `${INTENT_PLACEHOLDER} - ${roleName}`;
+export function composeFooterStatus(roleName: string): string {
+  return `Pi-role: ${roleName}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -243,12 +225,9 @@ export function composeFooterStatus(roleName: string, intent: string | undefined
  *      `setActiveTools`. We always overwrite; the `inherit` case skips
  *      this step entirely.
  *   4. Footer — `setStatus` so the role name shows in the status bar.
- *   5. Session name — `setSessionName` with the composed "role — intent"
- *      string. If we have a `preservedIntent` we use it, otherwise the
- *      first user message will trigger Phase 5's title generator.
- *   6. Persist — `appendEntry` so `/reload` and `session_start` with
+ *   5. Persist — `appendEntry` so `/reload` and `session_start` with
  *      reason="reload"|"resume" can restore the active role.
- *   7. Notify — `sendMessage` with the role-notification customType
+ *   6. Notify — `sendMessage` with the role-notification customType
  *      unless `silent` is set (e.g. on initial session_start).
  *
  * Warnings are accumulated and returned. Callers decide whether to surface
@@ -315,22 +294,14 @@ export async function applyRole(
 
   // 4. Footer status
   if (ctx.hasUI) {
-    ctx.ui.setStatus(STATUS_KEY, composeFooterStatus(role.name, options.preservedIntent));
+    ctx.ui.setStatus(STATUS_KEY, composeFooterStatus(role.name));
   }
 
-  // 5. Session name — only override when we have a meaningful intent to show.
-  //    Otherwise we let pi's built-in session name stand.
-  const sessionName = composeSessionName(options.preservedIntent, role.name);
-  if (sessionName) {
-    pi.setSessionName(sessionName);
-  }
-
-  // 6. Persist
+  // 5. Persist
   const state: ActiveRoleState = {
     name: role.name,
     source: role.source,
     path: role.path,
-    intent: options.preservedIntent,
     appliedAt: Date.now(),
   };
   pi.appendEntry(ACTIVE_ROLE_ENTRY_TYPE, state);
