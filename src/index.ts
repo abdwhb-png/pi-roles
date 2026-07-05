@@ -26,6 +26,7 @@ import { Type } from "@earendil-works/pi-ai";
 import { applyRole, effectiveIntercomMode, resetSession, type RoleNotificationDetails } from "./apply.ts";
 import { intercomPromptAddendum, isIntercomAvailable } from "./intercom.ts";
 import { discoverRoles, resolveRole, RoleResolutionError } from "./roles.ts";
+import { refreshRoleWidget, removeRoleWidget } from "./widget.ts";
 import {
   ACTIVE_ROLE_ENTRY_TYPE,
   BUILTIN_ROLE_DEFAULT_NAME,
@@ -260,6 +261,11 @@ export default function (pi: ExtensionAPI): void {
       };
     },
   });
+
+  // ---------------------------------------------------------------- cleanup
+  pi.on("session_shutdown", async (_event, ctx) => {
+    removeRoleWidget(ctx);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -434,11 +440,19 @@ async function applyResolved(
       ctx,
       warnOnMissingMcp: state.settings.warnOnMissingMcp ?? true,
       intercomMode: state.settings.intercomMode,
+      showStatus: state.settings.showStatus,
     },
     options,
   );
 
   state.activeRole = resolved;
+
+  // Refresh the above-editor role widget (gated on showWidget setting).
+  refreshRoleWidget(
+    ctx,
+    state.activeRole,
+    state.settings.showWidget ?? true,
+  );
 
   debugLog("index", `applied role=${resolved.name}`, { warnings: result.warnings });
 

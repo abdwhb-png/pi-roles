@@ -286,6 +286,10 @@ export const PiRolesSettingsSchema = Type.Object(
 
     /** Whether to surface a warning when an mcp:* tool can't be resolved. Default: true. */
     warnOnMissingMcp: Type.Optional(Type.Boolean()),
+    /** Whether to show the role name in the footer/status bar via ctx.ui.setStatus. Default: true. */
+    showStatus: Type.Optional(Type.Boolean()),
+    /** Whether to show the role name as a fancy-footer widget. Requires pi-fancy-footer. Default: true. */
+    showWidget: Type.Optional(Type.Boolean()),
   },
   {
     additionalProperties: true,

@@ -51,6 +51,8 @@ export interface ApplyContext {
   warnOnMissingMcp: boolean;
   /** Optional global default; merged in `effectiveIntercomMode`. */
   intercomMode?: IntercomMode;
+  /** Whether to show the role name in the status bar. Default: true. */
+  showStatus?: boolean;
 }
 
 export interface ApplyOptions {
@@ -293,7 +295,7 @@ export async function applyRole(
   }
 
   // 4. Footer status
-  if (ctx.hasUI) {
+  if ((applyCtx.showStatus ?? true) && ctx.hasUI) {
     ctx.ui.setStatus(STATUS_KEY, composeFooterStatus(role.name));
   }
 
