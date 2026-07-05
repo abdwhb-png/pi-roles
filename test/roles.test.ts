@@ -137,8 +137,8 @@ describe("normalizeTools", () => {
   it("absent → inherit", () => {
     expect(normalizeTools(undefined)).toEqual({ kind: "inherit" });
   });
-  it("null → set:[]", () => {
-    expect(normalizeTools(null)).toEqual({ kind: "set", names: [] });
+  it("null → inherit (same as absent — do not touch tools)", () => {
+    expect(normalizeTools(null)).toEqual({ kind: "inherit" });
   });
   it("empty string → set:[]", () => {
     expect(normalizeTools("")).toEqual({ kind: "set", names: [] });
@@ -219,10 +219,10 @@ describe("resolveRole", () => {
     expect(() => resolveRole("nope", [])).toThrow(/not found/);
   });
 
-  it("child tools=set:[] explicitly disables inherited tools", () => {
+  it("child tools=null inherits parent tools (inherit does not override parent set)", () => {
     const p = rawFromText(fm({ name: "p", tools: "read, write" }), "p");
     const c = rawFromText(fm({ name: "c", extends: "p", tools: null }), "c");
-    expect(resolveRole("c", [p, c]).tools).toEqual({ kind: "set", names: [] });
+    expect(resolveRole("c", [p, c]).tools).toEqual({ kind: "set", names: ["read", "write"] });
   });
 
   it("child tools omitted inherits from parent", () => {

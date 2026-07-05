@@ -85,6 +85,17 @@ export const RoleSourceSchema = Type.Union(
 );
 export type RoleSource = Static<typeof RoleSourceSchema>;
 
+/** How pi-roles composes the active role with Pi's original system prompt. */
+export const SystemPromptModeSchema = Type.Union(
+  [
+    Type.Literal("strict-additive"),
+    Type.Literal("role-last"),
+    Type.Literal("legacy-replace"),
+  ],
+  { description: "How pi-roles composes the active role with Pi's original system prompt." },
+);
+export type SystemPromptMode = Static<typeof SystemPromptModeSchema>;
+
 // ---------------------------------------------------------------------------
 // Frontmatter
 // ---------------------------------------------------------------------------
@@ -146,7 +157,7 @@ export const RoleFrontmatterSchema = Type.Object(
     tools: Type.Optional(
       Type.Union([Type.String(), Type.Null()], {
         description:
-          "Comma-separated tool names. Empty/null = no tools. Use mcp:server-name for MCP tools.",
+          "Comma-separated tool names. Empty string = no tools. Null/absent = inherit (leave Pi's toolset untouched). Use mcp:server-name for MCP tools.",
       }),
     ),
 
@@ -253,8 +264,13 @@ export const PiRolesSettingsSchema = Type.Object(
      */
     defaultRole: Type.Optional(Type.String({ minLength: 1 })),
     /**
-     * Whether to append the original system prompt (e.g. from AGENTS.md or --append-system-prompt)
-     * before the role's body. Default: true.
+     * How to compose the active role with Pi's original system prompt.
+     * Default: "strict-additive".
+     */
+    systemPromptMode: Type.Optional(SystemPromptModeSchema),
+    /**
+     * Compatibility setting. true means preserve/append Pi's original prompt;
+     * false means use the legacy replacement mode. `systemPromptMode` wins when set.
      */
     enableSystemPromptAppend: Type.Optional(Type.Boolean()),
 

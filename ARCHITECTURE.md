@@ -57,7 +57,7 @@ role for interactive role-building. Roles are user content, not extension code.
 | **Disk → `roles.ts`** | File reads (sync), YAML parse, TypeBox validation — all trustless: malformed input is rejected with a hard error |
 | **`roles.ts` → `apply.ts`** | `ResolvedRole` objects — validated, merged, normalized |
 | **`apply.ts` → Pi runtime** | Calls to `pi.setModel`, `pi.setThinkingLevel`, `pi.setActiveTools`, `pi.setSessionName`, `pi.appendEntry` — all sandboxed within the Pi extension host |
-| **Pi runtime → LLM** | System prompt = role body + optional intercom addendum. The model receives exactly the role definition the user authored; no extension code leaks into the prompt |
+| **Pi runtime → LLM** | System prompt = Pi's original prompt + pi-roles priority contract + active role section + optional intercom addendum + final reminder by default. Legacy full replacement is explicit. |
 | **`pi-intercom` (optional)** | `intercom` tool added to active set; prompt addendum injected into system prompt. pi-roles never speaks the intercom wire protocol — it only opts roles in or out |
 
 ## Module Inventory
@@ -73,7 +73,7 @@ touches the filesystem or Pi APIs.
 | `ThinkingLevelSchema` | TypeBox union | `off` / `minimal` / `low` / `medium` / `high` / `xhigh` |
 | `IntercomModeSchema` | TypeBox union | `off` / `receive` / `send` / `both` |
 | `RoleScopeSchema` | TypeBox union | `user` / `project` / `both` |
-| `PiRolesSettingsSchema` | TypeBox schema | Settings namespace under `settings.json` → `"pi-roles"` |
+| `PiRolesSettingsSchema` | TypeBox schema | Settings namespace under `settings.json` → `"pi-roles"`, including `systemPromptMode` |
 | `ActiveRoleStateSchema` | TypeBox schema | Shape persisted via `pi.appendEntry` for `/reload` survival |
 | `RawRole` | TS interface | Parsed role from disk before `extends` resolution |
 | `ResolvedRole` | TS interface | Fully resolved role with `extends` chain merged |
@@ -118,8 +118,9 @@ thinking, then tools. Footer, session name, and persistence are non-blocking and
 among themselves doesn't matter.
 
 **System prompt is NOT set here.** Pi rebuilds the prompt per turn; the `before_agent_start`
-handler in `index.ts` returns the role body. `applyRole` stashes warnings and returns the
-persisted `ActiveRoleState` for the caller to mirror in its in-memory pointer.
+handler in `index.ts` composes Pi's original prompt with the active role layer. `applyRole`
+stashes warnings and returns the persisted `ActiveRoleState` for the caller to mirror in its
+in-memory pointer.
 
 ### `src/index.ts` — Main entry + lifecycle wiring
 
@@ -129,7 +130,7 @@ The Pi extension entry point (`export default function(pi: ExtensionAPI)`). Owns
 |---|---|
 | **Module-scoped `RuntimeState`** | `activeRole`, `pendingRoleAfterReset`, `roles[]`, `shadowed[]`, `settings` |
 | **`session_start` handler** | Restore from `appendEntry` (reload/resume) or resolve from precedence chain (pendingReset > `--role` > `PI_ROLE` > `defaultRole` > built-in). Calls `applyResolved`. |
-| **`before_agent_start` handler** | Returns `{ systemPrompt: role.body + intercom addendum }`. **Full replacement** — ignores Pi's default coding-assistant framing. |
+| **`before_agent_start` handler** | Returns a layered `{ systemPrompt }`. Default mode preserves Pi's original prompt and adds role guidance; `legacy-replace` explicitly restores full replacement. |
 | **`/role` command** | Dispatches `list`, `current`, `reload`, or `<name> [--reset]`. Tab-completes role names against discovery. |
 | **`--role` flag** | Registered as a Pi flag; read in `pickInitialRoleName`. |
 | **Message renderer** | Registered for `pi-roles:notification` custom type so `Switched to role X` surfaces cleanly. |
@@ -218,17 +219,14 @@ session_start (reason="startup")
 ```
 before_agent_start fires
   │
-  ├─► If !state.intent && first user prompt:
-  │     void generateAndApplyTitle(...)    [fire-and-forget]
-  │       └─ on success: pi.setSessionName("Design auth schema - architect")
-  │                      ctx.ui.setStatus(STATUS_KEY, "Design auth schema - architect")
-  │
-  └─► composeSystemPrompt(state, pi)
+  └─► composeSystemPrompt(state, pi, event.systemPrompt)
         │
-        ├─ activeRole.body
-        ├─ + intercomPromptAddendum (if intercom mode ≠ off)
-        │
-        └─► return { systemPrompt: body + addendum }
+        ├─ original Pi system prompt (default modes)
+        ├─ pi-roles priority contract
+        ├─ active role section
+        ├─ intercomPromptAddendum (if intercom mode ≠ off)
+        ├─ final priority reminder
+        └─► return { systemPrompt }
 ```
 
 ### Mid-session role swap

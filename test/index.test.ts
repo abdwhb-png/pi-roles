@@ -146,7 +146,7 @@ describe("roleCompletions", () => {
 });
 
 // ---------------------------------------------------------------------------
-// composeSystemPrompt — replacement contract
+// composeSystemPrompt — layered role contract
 // ---------------------------------------------------------------------------
 
 describe("composeSystemPrompt", () => {
@@ -166,13 +166,17 @@ describe("composeSystemPrompt", () => {
     expect(composeSystemPrompt({ activeRole: null, settings: {} }, piWith([]))).toBeUndefined();
   });
 
-  it("returns role body verbatim, ignoring any upstream system prompt", () => {
+  it("preserves upstream prompt and adds the active role by default", () => {
     const role = resolveSingle("architect", "You are an architect. Design only.");
-    const result = composeSystemPrompt({ activeRole: role, settings: {} }, piWith([]));
-    expect(result).toEqual({ systemPrompt: "You are an architect. Design only." });
-    // The critical assertion: we didn't compose with Pi's default. There is
-    // no path in this function that reads upstream prompt content.
-    expect(result?.systemPrompt).not.toMatch(/coding assistant/);
+    const result = composeSystemPrompt(
+      { activeRole: role, settings: {} },
+      piWith([]),
+      "Pi core prompt.",
+    );
+    expect(result?.systemPrompt).toContain("Pi core prompt.");
+    expect(result?.systemPrompt).toContain("# Active Role: architect");
+    expect(result?.systemPrompt).toContain("You are an architect. Design only.");
+    expect(result?.systemPrompt).toContain("core invariants win");
   });
 
   it("appends intercom addendum when mode!=off and intercom tool is registered", () => {
@@ -180,15 +184,22 @@ describe("composeSystemPrompt", () => {
     const result = composeSystemPrompt(
       { activeRole: role, settings: {} },
       piWith([INTERCOM_TOOL_NAME], "architect"),
+      "Pi core prompt.",
     );
-    expect(result?.systemPrompt).toMatch(/^Body\.\n\n## intercom/);
+    expect(result?.systemPrompt).toContain("# Active Role: architect\n\nBody.");
+    expect(result?.systemPrompt).toContain("## intercom (send mode)");
     expect(result?.systemPrompt).toContain("architect");
   });
 
   it("omits addendum when intercom tool is not registered", () => {
     const role = resolveSingle("architect", "Body.", "send");
-    const result = composeSystemPrompt({ activeRole: role, settings: {} }, piWith([]));
-    expect(result).toEqual({ systemPrompt: "Body." });
+    const result = composeSystemPrompt(
+      { activeRole: role, settings: {} },
+      piWith([]),
+      "Pi core prompt.",
+    );
+    expect(result?.systemPrompt).toContain("# Active Role: architect\n\nBody.");
+    expect(result?.systemPrompt).not.toContain("## intercom");
   });
 
   it("omits addendum when intercom mode resolves to off", () => {
@@ -196,8 +207,10 @@ describe("composeSystemPrompt", () => {
     const result = composeSystemPrompt(
       { activeRole: role, settings: { intercomMode: "off" } },
       piWith([INTERCOM_TOOL_NAME]),
+      "Pi core prompt.",
     );
-    expect(result).toEqual({ systemPrompt: "Body." });
+    expect(result?.systemPrompt).toContain("# Active Role: architect\n\nBody.");
+    expect(result?.systemPrompt).not.toContain("## intercom");
   });
 
   it("global settings.intercomMode applies when role doesn't override", () => {
@@ -205,7 +218,18 @@ describe("composeSystemPrompt", () => {
     const result = composeSystemPrompt(
       { activeRole: role, settings: { intercomMode: "both" } },
       piWith([INTERCOM_TOOL_NAME], "architect"),
+      "Pi core prompt.",
     );
     expect(result?.systemPrompt).toMatch(/intercom \(both modes\)/);
+  });
+
+  it("keeps legacy replacement explicit", () => {
+    const role = resolveSingle("architect", "Body.");
+    const result = composeSystemPrompt(
+      { activeRole: role, settings: { systemPromptMode: "legacy-replace" } },
+      piWith([]),
+      "Pi core prompt.",
+    );
+    expect(result).toEqual({ systemPrompt: "Body." });
   });
 });

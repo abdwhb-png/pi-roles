@@ -17,7 +17,7 @@ PI_ROLE=planner pi               # or via env
 
 When you swap roles, the session's **system prompt, model, thinking level, and active tool set** are updated according to the new role's definition. Conversation history is preserved by default.
 
-By default, `pi-roles` now **preserves Pi's fully-built system prompt** (default assistant framing, `AGENTS.md`, `CLAUDE.md`, `.pi/system.md`, and any `--append-system-prompt` content) and appends the role body after it. You can explicitly disable that behavior with the `enableSystemPromptAppend` setting if you want the historical full-override mode.
+By default, `pi-roles` **preserves Pi's fully-built system prompt** (default assistant framing, `SYSTEM.md`, `AGENTS.md`, `CLAUDE.md`, `APPEND_SYSTEM.md`, and any appended system-prompt content) and adds the role as a bounded persona/task-strategy layer. You can explicitly select the historical full-override behavior with `systemPromptMode: "legacy-replace"` or the compatibility setting `enableSystemPromptAppend: false`.
 
 ---
 
@@ -151,7 +151,7 @@ The default `roleScope` is `both` (project + user + built-in). Override via sett
   "pi-roles": {
     "roleScope": "both",              // "user" | "project" | "both"
     "defaultRole": "architect",       // optional; falls back to built-in pi-agent
-    "enableSystemPromptAppend": true,   // default: true
+    "systemPromptMode": "strict-additive", // default: preserve Pi invariants + add role
     "intercomMode": "off",            // "off" | "receive" | "send" | "both"
   }
 }
@@ -181,18 +181,30 @@ If `defaultRole` points to a missing role, the built-in `pi-agent` is used and a
 
 ## System prompt composition
 
-By default, `pi-roles` composes the final system prompt as:
+By default, `pi-roles` uses `systemPromptMode: "strict-additive"` and composes the final system prompt as explicit layers:
 
 1. Pi's original system prompt (`event.systemPrompt`)
-2. the role body
-3. the optional intercom addendum
+2. a short `pi-roles` priority contract
+3. the active role body inside an `Active Role` section
+4. the optional intercom addendum
+5. a short final reminder
 
-This behavior is controlled by `enableSystemPromptAppend`:
+The priority contract is intentional: Pi core invariants win over role guidance. Core invariants include `SYSTEM.md`, `AGENTS.md`, `APPEND_SYSTEM.md`, platform safety/tool rules, and any instructions already present in Pi's original system prompt. The active role guides persona, domain expertise, tone, and task strategy inside those boundaries.
 
-- `true` (default): preserve Pi's original system/context prompt and append the role body
-- `false`: historical full-override mode — use only the role body (+ intercom addendum)
+`systemPromptMode` controls the strategy:
 
-If `enableSystemPromptAppend` is enabled but Pi does not provide an original system prompt for the turn, `pi-roles` surfaces a warning so the failure is visible instead of silently discarding expected context.
+- `strict-additive` (default): preserve Pi's original prompt, add a priority contract, add the role section, then add the final reminder
+- `role-last`: preserve Pi's original prompt and keep the role near the end, followed by the final reminder; useful for weaker models that follow recent instructions more strongly
+- `legacy-replace`: historical full-override mode — use only the role body (+ intercom addendum)
+
+`enableSystemPromptAppend` remains accepted for compatibility and now maps logically to the same modes:
+
+- `true`: preserve Pi's original prompt and add the role (`strict-additive` unless `systemPromptMode` is set)
+- `false`: do not append/preserve Pi's original prompt (`legacy-replace` unless `systemPromptMode` is set)
+
+If both settings are present, `systemPromptMode` wins.
+
+If an additive mode expects Pi's original system prompt but Pi does not provide one for the turn, `pi-roles` surfaces a warning so the failure is visible instead of silently discarding expected context.
 
 ---
 

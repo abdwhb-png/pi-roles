@@ -258,8 +258,7 @@ function basenameWithoutExt(path: string): string {
  * we have access to `pi.getAllTools()`.
  */
 export function normalizeTools(value: string | null | undefined): ToolsDirective {
-  if (value === undefined) return { kind: "inherit" };
-  if (value === null) return { kind: "set", names: [] };
+  if (value === undefined || value === null) return { kind: "inherit" };
   const names = value
     .split(",")
     .map((s) => s.trim())

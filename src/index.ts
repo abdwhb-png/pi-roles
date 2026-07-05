@@ -9,9 +9,9 @@
  *     otherwise resolve a role name from the precedence chain (pendingReset
  *     > --role > PI_ROLE > settings.defaultRole > built-in role-assistant)
  *     and apply it.
- *   - `before_agent_start` — re-inject the active role's body as the system
- *     prompt every turn (Pi rebuilds the prompt per turn; this is the
- *     stable hook).
+ *   - `before_agent_start` — compose the active role with Pi's rebuilt system
+ *     prompt every turn (Pi rebuilds the prompt per turn; this is the stable
+ *     hook).
  *   - `/role` command — list, current, reload, switch (with optional
  *     --reset to clear history first).
  *
@@ -23,7 +23,6 @@
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "@earendil-works/pi-ai";
-import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import { applyRole, effectiveIntercomMode, resetSession, type RoleNotificationDetails } from "./apply.ts";
 import { intercomPromptAddendum, isIntercomAvailable } from "./intercom.ts";
 import { discoverRoles, resolveRole, RoleResolutionError } from "./roles.ts";
@@ -35,6 +34,7 @@ import {
   type PiRolesSettings,
   type RawRole,
   type ResolvedRole,
+  type SystemPromptMode,
 } from "./schemas.ts";
 import { loadSettings } from "./settings.ts";
 import { debugLog } from "./debug.ts";
@@ -44,6 +44,12 @@ import { findUnprocessedSwitchRequest, ROLE_SWITCH_PROCESSED_TYPE } from "./prot
 const FLAG_NAME = "role";
 const ENV_VAR = "PI_ROLE";
 const SUBCOMMANDS = ["list", "current", "reload"] as const;
+
+interface AutocompleteItem {
+  value: string;
+  label: string;
+  description?: string;
+}
 
 interface RuntimeState {
   /** Live role applied to this session, or null before first apply. */
@@ -123,18 +129,12 @@ export default function (pi: ExtensionAPI): void {
 
   // ----------------------------------------------------------- before_agent_start
   //
-  // We intentionally ignore `event.systemPrompt` (Pi's default coding-assistant
-  // framing plus anything earlier extensions in the chain produced). The
-  // founding goal of pi-roles is to make the role body authoritative — a
-  // non-coding role (marketing, research, ops) must not inherit the default
-  // "expert coding assistant" voice or it stops behaving like its description.
-  //
-  // Pi's docstring on BeforeAgentStartEventResult.systemPrompt says exactly
-  // "Replace the system prompt for this turn"; that is what we do.
-  // Subsequent extensions in the chain see our value as their
-  // event.systemPrompt and may compose if they choose.
-  //
-  // already-running, no-model) internally.
+  // Pi rebuilds its system prompt for every turn and passes it here as
+  // `event.systemPrompt`. By default we preserve that prompt (SYSTEM.md,
+  // AGENTS.md, APPEND_SYSTEM.md, and earlier extension output) and add the
+  // active role as a bounded persona/task-strategy layer. Full replacement is
+  // still available through the explicit legacy mode for users who want the
+  // original upstream behavior.
   pi.on("before_agent_start", async (event, ctx) => {
     debugLog("index", "before_agent_start fired", {
       hasActiveRole: !!state.activeRole,
@@ -267,12 +267,11 @@ export default function (pi: ExtensionAPI): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Build the replacement system prompt for the current active role.
+ * Build the system prompt for the current active role.
  *
  * Returns `undefined` when there's no active role (Pi keeps its default for
- * that turn). Otherwise returns `{ systemPrompt }` with the role body — and,
- * when intercom is requested AND the intercom tool is registered, a small
- * mode-specific addendum appended to the body.
+ * that turn). Otherwise returns `{ systemPrompt }` with Pi's original prompt
+ * preserved by default and the active role added as a bounded persona layer.
  *
  * Exported for unit tests; the handler in `before_agent_start` is a one-line
  * delegation.
@@ -285,29 +284,58 @@ export function composeSystemPrompt(
 ): { systemPrompt: string } | undefined {
   if (!state.activeRole) return undefined;
   const body = state.activeRole.body;
-  const mode = effectiveIntercomMode(state.activeRole, state.settings.intercomMode);
+  const intercomMode = effectiveIntercomMode(state.activeRole, state.settings.intercomMode);
   const addendum =
-    mode !== "off" && isIntercomAvailable(pi as ExtensionAPI)
-      ? intercomPromptAddendum(mode, pi.getSessionName())
+    intercomMode !== "off" && isIntercomAvailable(pi as ExtensionAPI)
+      ? intercomPromptAddendum(intercomMode, pi.getSessionName())
       : "";
-      
-  const parts = [];
-  
-  if (state.settings.enableSystemPromptAppend !== false) {
-    if (originalPrompt) {
-      parts.push(originalPrompt);
-    } else if (ctx && ctx.hasUI) {
-      ctx.ui.notify("pi-roles: enableSystemPromptAppend is true but no original system prompt was found to append.", "warning");
-    }
+
+  const systemPromptMode = resolveSystemPromptMode(state.settings);
+  if (systemPromptMode === "legacy-replace") {
+    return joinPromptParts([body, addendum]);
   }
-  
-  parts.push(body);
-  
-  if (addendum) {
-    parts.push(addendum);
+
+  if (!originalPrompt && ctx && ctx.hasUI) {
+    ctx.ui.notify("pi-roles: systemPromptMode preserves Pi's original prompt, but no original system prompt was found.", "warning");
   }
-  
-  const filteredParts = parts.filter((p) => p.length > 0);
+
+  const priorityContract = buildRolePriorityContract();
+  const roleSection = buildActiveRoleSection(state.activeRole);
+  const finalReminder = buildFinalPriorityReminder();
+
+  const parts = systemPromptMode === "role-last"
+    ? [originalPrompt, priorityContract, addendum, roleSection, finalReminder]
+    : [originalPrompt, priorityContract, roleSection, addendum, finalReminder];
+  return joinPromptParts(parts);
+}
+
+function resolveSystemPromptMode(settings: PiRolesSettings): SystemPromptMode {
+  if (settings.systemPromptMode) return settings.systemPromptMode;
+  if (settings.enableSystemPromptAppend === false) return "legacy-replace";
+  return "strict-additive";
+}
+
+function buildRolePriorityContract(): string {
+  return [
+    "# pi-roles Instruction Priority",
+    "Pi core invariants are mandatory. These include SYSTEM.md, AGENTS.md, APPEND_SYSTEM.md, platform safety/tool rules, and any instructions already present in the original system prompt.",
+    "The active role is a persona and task-strategy layer. Follow it within those invariant boundaries. If role guidance conflicts with core instructions, core invariants win.",
+  ].join("\n\n");
+}
+
+function buildActiveRoleSection(role: ResolvedRole): string {
+  return `# Active Role: ${role.name}\n\n${role.body}`;
+}
+
+function buildFinalPriorityReminder(): string {
+  return [
+    "# pi-roles Final Reminder",
+    "Follow Pi core invariants first. Use the active role for expertise, tone, and strategy. On conflict, core invariants win.",
+  ].join("\n\n");
+}
+
+function joinPromptParts(parts: Array<string | undefined>): { systemPrompt: string } | undefined {
+  const filteredParts = parts.map((part) => part?.trim()).filter((part): part is string => !!part);
   if (filteredParts.length === 0) return undefined;
   return { systemPrompt: filteredParts.join("\n\n") };
 }
