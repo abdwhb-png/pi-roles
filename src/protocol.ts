@@ -13,6 +13,12 @@
  */
 
 import { Type } from "typebox";
+import {
+  ACTIVE_ROLE_ENTRY_TYPE,
+  type ActiveRoleState,
+} from "./schemas.ts";
+
+export { ACTIVE_ROLE_ENTRY_TYPE, type ActiveRoleState } from "./schemas.ts";
 
 // ── Entry-type constants ──
 
@@ -106,6 +112,50 @@ export function findUnprocessedSwitchRequest(
 
     if (!processed) {
       return { entry: { id: e.id }, data };
+    }
+  }
+  return null;
+}
+
+/**
+ * Persist the current active role state in the session log. pi-roles calls
+ * this when a role is applied; other extensions can read the latest state
+ * through `findLatestActiveRoleState` without importing pi-roles runtime code.
+ */
+export function writeActiveRoleState(
+  pi: { appendEntry: (customType: string, data?: unknown) => void },
+  state: Omit<ActiveRoleState, "appliedAt"> & { appliedAt?: number },
+): ActiveRoleState {
+  const activeRoleState: ActiveRoleState = {
+    name: state.name,
+    source: state.source,
+    path: state.path,
+    appliedAt: state.appliedAt ?? Date.now(),
+  };
+  pi.appendEntry(ACTIVE_ROLE_ENTRY_TYPE, activeRoleState);
+  return activeRoleState;
+}
+
+/** Return the latest valid pi-roles active role state from a session log. */
+export function findLatestActiveRoleState(
+  entries: ReadonlyArray<{
+    type: string;
+    customType?: string;
+    data?: unknown;
+  }>,
+): ActiveRoleState | null {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (!entry || entry.type !== "custom" || entry.customType !== ACTIVE_ROLE_ENTRY_TYPE) continue;
+    const data = entry.data as Partial<ActiveRoleState> | undefined;
+    if (
+      data &&
+      typeof data.name === "string" &&
+      typeof data.source === "string" &&
+      typeof data.path === "string" &&
+      typeof data.appliedAt === "number"
+    ) {
+      return data as ActiveRoleState;
     }
   }
   return null;

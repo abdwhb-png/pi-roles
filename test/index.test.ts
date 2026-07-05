@@ -102,6 +102,7 @@ describe("roleCompletions", () => {
     makeRole("architect", "Designs"),
     makeRole("planner", "Plans"),
     makeRole("orchestrator", "Coordinates"),
+    makeRole("pi-caveman", "Compressed replies"),
   ];
 
   it("empty prefix returns subcommands + all roles", () => {
@@ -119,6 +120,11 @@ describe("roleCompletions", () => {
   it("prefix narrows results", () => {
     const items = roleCompletions("arc", roles);
     expect(items?.map((i) => i.value)).toEqual(["architect"]);
+  });
+
+  it("matches role name segments", () => {
+    const items = roleCompletions("cav", roles);
+    expect(items?.map((i) => i.value)).toEqual(["pi-caveman"]);
   });
 
   it("prefix matches subcommand", () => {

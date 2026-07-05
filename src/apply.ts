@@ -26,7 +26,6 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import {
-  ACTIVE_ROLE_ENTRY_TYPE,
   ROLE_NOTIFICATION_MESSAGE_TYPE,
   STATUS_KEY,
   type ActiveRoleState,
@@ -35,6 +34,7 @@ import {
   type ToolsDirective,
 } from "./schemas.ts";
 import { debugLog } from "./debug.ts";
+import { writeActiveRoleState } from "./protocol.ts";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -298,13 +298,11 @@ export async function applyRole(
   }
 
   // 5. Persist
-  const state: ActiveRoleState = {
+  const state = writeActiveRoleState(pi, {
     name: role.name,
     source: role.source,
     path: role.path,
-    appliedAt: Date.now(),
-  };
-  pi.appendEntry(ACTIVE_ROLE_ENTRY_TYPE, state);
+  });
 
   // 7. Notify
   if (!options.silent) {

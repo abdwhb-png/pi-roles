@@ -527,7 +527,7 @@ export function roleCompletions(prefix: string, roles: RawRole[]): AutocompleteI
     }
   }
   for (const r of roles) {
-    if (r.frontmatter.name.toLowerCase().startsWith(needle)) {
+    if (matchesCompletionPrefix(r.frontmatter.name, needle)) {
       items.push({
         value: r.frontmatter.name,
         label: r.frontmatter.name,
@@ -536,6 +536,14 @@ export function roleCompletions(prefix: string, roles: RawRole[]): AutocompleteI
     }
   }
   return items.length > 0 ? items : null;
+}
+
+function matchesCompletionPrefix(value: string, needle: string): boolean {
+  if (needle.length === 0) return true;
+  return value
+    .toLowerCase()
+    .split(/[\s._/-]+/)
+    .some((part) => part.startsWith(needle));
 }
 
 function subcommandDescription(sub: (typeof SUBCOMMANDS)[number]): string {

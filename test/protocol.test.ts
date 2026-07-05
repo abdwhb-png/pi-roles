@@ -11,9 +11,12 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
+  ACTIVE_ROLE_ENTRY_TYPE,
   ROLE_SWITCH_REQUEST_ENTRY_TYPE,
   ROLE_SWITCH_PROCESSED_TYPE,
+  findLatestActiveRoleState,
   findUnprocessedSwitchRequest,
+  writeActiveRoleState,
   writeRoleSwitchRequest,
 } from "../src/protocol.ts";
 
@@ -181,5 +184,41 @@ describe("writeRoleSwitchRequest", () => {
     expect(spy).toHaveBeenCalledTimes(1);
     const [, payload] = spy.mock.calls[0] as [string, Record<string, unknown>];
     expect(payload.sourceEntryId).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Active role state
+// ---------------------------------------------------------------------------
+
+describe("active role state helpers", () => {
+  it("writes the active role state", () => {
+    const spy = vi.fn();
+    const fakePi = { appendEntry: spy };
+
+    writeActiveRoleState(fakePi, {
+      name: "pi-caveman",
+      source: "user",
+      path: "/roles/pi-caveman.md",
+    });
+
+    expect(spy).toHaveBeenCalledWith(
+      ACTIVE_ROLE_ENTRY_TYPE,
+      expect.objectContaining({
+        name: "pi-caveman",
+        source: "user",
+        path: "/roles/pi-caveman.md",
+        appliedAt: expect.any(Number),
+      }),
+    );
+  });
+
+  it("finds the latest active role state", () => {
+    const entries = makeEntries(
+      { type: "custom", customType: ACTIVE_ROLE_ENTRY_TYPE, data: { name: "planner", source: "project", path: "/planner.md", appliedAt: 1 }, id: "a1" },
+      { type: "custom", customType: ACTIVE_ROLE_ENTRY_TYPE, data: { name: "pi-caveman", source: "user", path: "/pi-caveman.md", appliedAt: 2 }, id: "a2" },
+    );
+
+    expect(findLatestActiveRoleState(entries)?.name).toBe("pi-caveman");
   });
 });
