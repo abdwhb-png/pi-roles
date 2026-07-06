@@ -287,6 +287,10 @@ export async function applyRole(
   warnings.push(...filtered.warnings);
   if (filtered.kind === "set") {
     pi.setActiveTools(filtered.names);
+  } else {
+    // No role in the extends chain explicitly defined tools.
+    // Reset to all available (SDK default behavior).
+    pi.setActiveTools(allTools.map((t) => t.name));
   }
   if (intercomMode !== "off" && !intercomAvailable) {
     warnings.push(

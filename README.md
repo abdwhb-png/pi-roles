@@ -88,7 +88,7 @@ Three explicit states with three different meanings:
 |---|---|
 | `tools: read, bash` | **set** — exactly these tools, nothing else |
 | `tools:` (present, empty) | **disable all tools** — read-only conversation, no actions |
-| field absent | **inherit** — from parent role (`extends`), else keep session default |
+| field absent | **inherit** — from parent role (`extends`). If no role in the `extends` chain defines tools, all available tools are activated (same as Pi's default). |
 
 You can also include MCP tool refs in the same field, mirroring `pi-subagents`:
 
@@ -125,7 +125,7 @@ A child role inherits everything from its parent and overrides selectively. Chai
 **Merge rules:**
 
 - `model`, `thinking`, `description`, `intercom`: child wins if set, else parent value.
-- `tools`: see the tri-state above. **Set overrides; empty disables; absent inherits.**
+- `tools`: see the tri-state above. **Set overrides; empty disables; absent inherits.** If no role in the chain sets tools, the role gets all available tools (Pi's default tool set).
 - Markdown body: parent's body is **prepended** to child's body with a separator. Useful for "stricter variant" patterns (`architect-strict extends architect`).
 - `name`: never inherited — always the child's own filename.
 

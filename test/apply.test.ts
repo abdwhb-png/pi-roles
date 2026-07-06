@@ -346,11 +346,11 @@ describe("applyRole", () => {
     expect(result.warnings.some((w) => w.includes("multiple providers"))).toBe(true);
   });
 
-  it("inherit tools → does not call setActiveTools", async () => {
-    const fake = makeFake();
+  it("inherit tools → resets to all available tools", async () => {
+    const fake = makeFake({ tools: [{ name: "read" }, { name: "write" }, { name: "edit" }] });
     const role = makeRole({ tools: { kind: "inherit" } });
     await applyRole(role, applyCtxOf(fake));
-    expect(fake.pi.setActiveTools).not.toHaveBeenCalled();
+    expect(fake.pi.setActiveTools).toHaveBeenCalledWith(["read", "write", "edit"]);
   });
 
   it("explicit empty tools → setActiveTools([])", async () => {

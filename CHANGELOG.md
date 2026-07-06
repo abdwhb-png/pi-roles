@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tools not resetting on role switch**: When a role has no `tools:` field and no ancestor in its `extends` chain defines one, the tool set is now reset to all available tools (Pi's default). Previously, tools from the previous role would persist ("sticky" behavior), causing role switches to silently inherit restricted tool sets from prior roles.
+
 ### Removed
 
 - **Intent/title generation removed.** No more `"Intent not defined"` placeholder in status bar. Status bar now shows `Pi-role: <name>`. Session name is just `<name>`. Deleted `src/title.ts` and `test/title.test.ts`. Removed `INTENT_PLACEHOLDER` constant, `preservedIntent` plumbing, and title-gen infrastructure from `apply.ts`, `index.ts`, `schemas.ts`.
