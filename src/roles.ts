@@ -335,6 +335,7 @@ export function resolveRole(name: string, all: RawRole[]): ResolvedRole {
   let model: string | undefined;
   let thinking: ResolvedRole["thinking"];
   let intercom: ResolvedRole["intercom"];
+  let handoffGuard: ResolvedRole["handoffGuard"];
   let tools: ToolsDirective = { kind: "inherit" };
   const bodies: string[] = [];
 
@@ -344,6 +345,7 @@ export function resolveRole(name: string, all: RawRole[]): ResolvedRole {
     if (fm.model !== undefined) model = fm.model;
     if (fm.thinking !== undefined) thinking = fm.thinking;
     if (fm.intercom !== undefined) intercom = fm.intercom;
+    if (fm.handoffGuard !== undefined) handoffGuard = fm.handoffGuard;
     const directive = normalizeTools(fm.tools);
     if (directive.kind === "set") tools = directive;
     if (role.body.length > 0) bodies.push(role.body);
@@ -360,6 +362,7 @@ export function resolveRole(name: string, all: RawRole[]): ResolvedRole {
     thinking,
     tools,
     intercom,
+    handoffGuard,
     body: bodies.join("\n\n---\n\n"),
     source: leaf.source,
     path: leaf.path,

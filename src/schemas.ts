@@ -165,6 +165,14 @@ export const RoleFrontmatterSchema = Type.Object(
     intercom: Type.Optional(IntercomModeSchema),
 
     /**
+     * Opaque policy key evaluated before exiting this role. pi-roles does not
+     * interpret the key; installed transition policies decide its meaning.
+     */
+    handoffGuard: Type.Optional(
+      Type.String({ minLength: 1, description: "Opaque role-transition policy key." }),
+    ),
+
+    /**
      * Name of a parent role to inherit from. Resolved against the same scope
      * the child was loaded from, then user, then built-in. Cycles are a hard
      * error.
@@ -230,6 +238,8 @@ export interface ResolvedRole {
   tools: ToolsDirective;
   /** Final intercom mode, or undefined to fall back to global. */
   intercom?: IntercomMode;
+  /** Opaque policy key evaluated before exiting this role. */
+  handoffGuard?: string;
   /** Final system prompt body (parent body prepended to child body when extending). */
   body: string;
   /** Source of the leaf role file (always the file the user requested by name). */

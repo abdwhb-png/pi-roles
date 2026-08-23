@@ -41,6 +41,10 @@ import { loadSettings } from "./settings.ts";
 import { debugLog } from "./debug.ts";
 import { formatSwitchRoleResult, validateRoleName } from "./switch-role.ts";
 import { findUnprocessedSwitchRequest, ROLE_SWITCH_PROCESSED_TYPE } from "./protocol.ts";
+import {
+  authorizeRoleTransition,
+  type RoleTransition,
+} from "./transition-policy.ts";
 
 const FLAG_NAME = "role";
 const ENV_VAR = "PI_ROLE";
@@ -125,7 +129,12 @@ export default function (pi: ExtensionAPI): void {
       silent = event.reason === "startup";
     }
 
-    await applyResolved(pi, ctx, state, targetName, { silent });
+    await applyResolved(pi, ctx, state, targetName, {
+      silent,
+      transition: {
+        kind: event.reason === "reload" || event.reason === "resume" ? "restore" : "startup",
+      },
+    });
   });
 
   // ----------------------------------------------------------- before_agent_start
@@ -145,13 +154,20 @@ export default function (pi: ExtensionAPI): void {
     const switchReq = findUnprocessedSwitchRequest(ctx.sessionManager.getEntries());
     if (switchReq) {
       debugLog("index", "consumed switch-request", { targetRole: switchReq.data.targetRole, reason: switchReq.data.reason });
-      await applyResolved(pi, ctx, state, switchReq.data.targetRole, {
+      const outcome = await applyResolved(pi, ctx, state, switchReq.data.targetRole, {
         silent: false,
+        transition: {
+          kind: "request",
+          reason: switchReq.data.reason,
+          sourceEntryId: switchReq.data.sourceEntryId,
+        },
       });
-      pi.appendEntry(ROLE_SWITCH_PROCESSED_TYPE, {
-        sourceEntryId: switchReq.entry.id,
-        timestamp: Date.now(),
-      });
+      if (outcome.applied) {
+        pi.appendEntry(ROLE_SWITCH_PROCESSED_TYPE, {
+          sourceEntryId: switchReq.entry.id,
+          timestamp: Date.now(),
+        });
+      }
       return composeSystemPrompt(state, pi, event.systemPrompt, ctx);
     }
 
@@ -185,6 +201,14 @@ export default function (pi: ExtensionAPI): void {
       const name = sub;
 
       if (wantsReset) {
+        const decision = await authorizeTargetRole(ctx, state, name, {
+          kind: "manual",
+        });
+        if (!decision.allow) {
+          if (ctx.hasUI) ctx.ui.notify(`pi-roles: ${decision.reason}`, "warning");
+          return;
+        }
+
         // Set the pending pointer FIRST: ctx.newSession() invalidates
         // session-bound captured state and synchronously fires session_start
         // before returning, so we can't apply the role after newSession()
@@ -198,7 +222,10 @@ export default function (pi: ExtensionAPI): void {
         return;
       }
 
-      await applyResolved(pi, ctx, state, name, { silent: false });
+      await applyResolved(pi, ctx, state, name, {
+        silent: false,
+        transition: { kind: "manual" },
+      });
     },
   });
 
@@ -241,20 +268,18 @@ export default function (pi: ExtensionAPI): void {
 
       // Apply through the shared path. Silent=true because the tool result
       // text already communicates the switch; a TUI banner would be noise.
-      await applyResolved(pi, ctx, state, roleName, {
+      const outcome = await applyResolved(pi, ctx, state, roleName, {
         silent: true,
-        
+        transition: { kind: "manual" },
       });
-
-      // applyResolved returns void on success; warnings are surfaced via
-      // ctx.ui.notify inside it. We compose a result text from the role
-      // name and any warnings we can observe via the active role pointer.
-      const warnings: string[] = [];
-      if (ctx.hasUI) {
-        // Warnings were already notified by applyResolved; we don't
-        // duplicate them here. The result text is a clean confirmation.
+      if (!outcome.applied) {
+        return {
+          content: [{ type: "text", text: `Error: ${outcome.reason}` }],
+          details: { switched: false, reason: outcome.reason },
+        };
       }
-      const text = formatSwitchRoleResult(roleName, warnings);
+
+      const text = formatSwitchRoleResult(roleName, []);
       return {
         content: [{ type: "text", text }],
         details: { switched: true, roleName },
@@ -407,13 +432,48 @@ function findRestoredState(
  * session_start, /role <name>, and /role reload share identical error
  * handling and warning surfacing.
  */
+interface ApplyResolvedOutcome {
+  applied: boolean;
+  reason?: string;
+}
+
+function readSessionEntries(
+  ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
+): readonly unknown[] {
+  try {
+    return ctx.sessionManager.getEntries();
+  } catch {
+    return [];
+  }
+}
+
+async function authorizeTargetRole(
+  ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
+  state: RuntimeState,
+  name: string,
+  transition: RoleTransition,
+) {
+  try {
+    const to = resolveRole(name, state.roles);
+    return authorizeRoleTransition({
+      from: state.activeRole,
+      to,
+      transition,
+      sessionEntries: readSessionEntries(ctx),
+    });
+  } catch (err) {
+    const message = err instanceof RoleResolutionError ? err.message : String(err);
+    return { allow: false as const, reason: message };
+  }
+}
+
 async function applyResolved(
   pi: ExtensionAPI,
   ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
   state: RuntimeState,
   name: string,
-  options: { silent: boolean; },
-): Promise<void> {
+  options: { silent: boolean; transition?: RoleTransition },
+): Promise<ApplyResolvedOutcome> {
   let resolved: ResolvedRole;
   try {
     resolved = resolveRole(name, state.roles);
@@ -428,9 +488,24 @@ async function applyResolved(
     const fallback = state.roles.find((r) => r.frontmatter.name === BUILTIN_ROLE_DEFAULT_NAME && r.source === "built-in");
     if (!fallback) {
       // Built-in is missing too — bail without changing session state.
-      return;
+      return { applied: false, reason: message };
     }
     resolved = resolveRole(BUILTIN_ROLE_DEFAULT_NAME, state.roles);
+  }
+
+  if (options.transition) {
+    const decision = await authorizeRoleTransition({
+      from: state.activeRole,
+      to: resolved,
+      transition: options.transition,
+      sessionEntries: readSessionEntries(ctx),
+    });
+    if (!decision.allow) {
+      if (ctx.hasUI && !options.silent) {
+        ctx.ui.notify(`pi-roles: ${decision.reason}`, "warning");
+      }
+      return { applied: false, reason: decision.reason };
+    }
   }
 
   const result = await applyRole(
@@ -462,6 +537,8 @@ async function applyResolved(
     // expanding the message.
     for (const w of result.warnings) ctx.ui.notify(`pi-roles: ${w}`, "warning");
   }
+
+  return { applied: true };
 }
 
 // ---------------------------------------------------------------------------

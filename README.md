@@ -57,6 +57,7 @@ model: anthropic/claude-opus-4-7
 thinking: high
 tools: read, grep, find, ls, write, edit
 intercom: send             # optional, per-role override
+handoffGuard: external-approval # optional, opaque exit-policy key
 extends: base-reviewer     # optional, role inheritance
 ---
 
@@ -78,6 +79,7 @@ do, never HOW to build it...
 | `thinking` | no | keeps the session's current thinking level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`) |
 | `tools` | no — see below | inherits from parent (if `extends`) or keeps current active set |
 | `intercom` | no | falls back to the global `intercomMode` setting |
+| `handoffGuard` | no | opaque key passed to registered exit-transition policies |
 | `extends` | no | role inherits from another role |
 
 #### `tools` — the tri-state
@@ -113,6 +115,36 @@ If the model isn't available (no API key, unknown provider), the role load surfa
 #### `intercom` — per-role override
 
 Values: `off`, `receive`, `send`, `both`. Defaults to the global `intercomMode` setting (which itself defaults to `off`). See [pi-intercom integration](#pi-intercom-integration) below.
+
+#### `handoffGuard` — exit policy key
+
+`handoffGuard` is an opaque string. `pi-roles` does not assign behavior to it; an installed policy decides whether a role with that key may transition to another role.
+
+```yaml
+handoffGuard: external-approval
+```
+
+The key inherits through `extends`; a child value overrides its parent. It is evaluated only for manual, tool-driven, or queued role transitions. Initial startup and session restoration bypass policies so a persisted role can always reload.
+
+### Transition policy API
+
+Extensions can register an async or synchronous policy through the public `pi-roles/transition-policy` subpath:
+
+```ts
+import { registerRoleTransitionPolicy } from "pi-roles/transition-policy";
+
+registerRoleTransitionPolicy(
+  (input) => {
+    if (input.from?.handoffGuard !== "external-approval") {
+      return { allow: true };
+    }
+    return { allow: false, reason: "External approval is required." };
+  },
+  "my-extension.external-approval",
+);
+```
+
+Policies receive source and target resolved roles, transition kind/reason, source entry id, and session entries. The first denial prevents the role change. A named registration replaces a stale handler from an extension reload. Use a stable key for every extension-owned policy.
 
 #### `extends` — role inheritance
 

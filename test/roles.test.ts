@@ -46,6 +46,7 @@ function fm(opts: {
   thinking?: string;
   tools?: string | null | undefined;
   intercom?: string;
+  handoffGuard?: string;
   extends?: string;
   body?: string;
 }): string {
@@ -54,6 +55,7 @@ function fm(opts: {
   if (opts.model !== undefined) lines.push(`model: ${opts.model}`);
   if (opts.thinking !== undefined) lines.push(`thinking: ${opts.thinking}`);
   if (opts.intercom !== undefined) lines.push(`intercom: ${opts.intercom}`);
+  if (opts.handoffGuard !== undefined) lines.push(`handoffGuard: ${opts.handoffGuard}`);
   if (opts.extends !== undefined) lines.push(`extends: ${opts.extends}`);
   if ("tools" in opts) {
     if (opts.tools === null) lines.push("tools:");
@@ -90,12 +92,14 @@ describe("parseRoleSource", () => {
       thinking: "high",
       tools: "read, write, edit",
       intercom: "both",
+      handoffGuard: "plan-submission",
       body: "System prompt body.",
     });
     const r = rawFromText(text, "full");
     expect(r.frontmatter.model).toBe("anthropic/claude-opus-4-7");
     expect(r.frontmatter.thinking).toBe("high");
     expect(r.frontmatter.intercom).toBe("both");
+    expect(r.frontmatter.handoffGuard).toBe("plan-submission");
     expect(r.frontmatter.tools).toBe("read, write, edit");
   });
 
@@ -229,6 +233,23 @@ describe("resolveRole", () => {
     const p = rawFromText(fm({ name: "p", tools: "read" }), "p");
     const c = rawFromText(fm({ name: "c", extends: "p" }), "c");
     expect(resolveRole("c", [p, c]).tools).toEqual({ kind: "set", names: ["read"] });
+  });
+
+  it("inherits an opaque handoff guard and lets the leaf override it", () => {
+    const parent = rawFromText(
+      fm({ name: "planning-base", handoffGuard: "plan-submission" }),
+      "planning-base",
+    );
+    const child = rawFromText(
+      fm({ name: "plan", extends: "planning-base", handoffGuard: "security-review" }),
+      "plan",
+    );
+
+    expect(resolveRole("plan", [parent, child]).handoffGuard).toBe("security-review");
+  });
+
+  it("leaves handoff guard undefined when no role declares one", () => {
+    expect(resolveRole("plain", [rawFromText(fm({ name: "plain" }), "plain")]).handoffGuard).toBeUndefined();
   });
 });
 

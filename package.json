@@ -38,6 +38,11 @@
       "types": "./dist/protocol.d.ts",
       "import": "./dist/protocol.js",
       "default": "./dist/protocol.js"
+    },
+    "./transition-policy": {
+      "types": "./dist/transition-policy.d.ts",
+      "import": "./dist/transition-policy.js",
+      "default": "./dist/transition-policy.js"
     }
   },
   "types": "./dist/index.d.ts",
